@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ZeroEntropy } from 'zeroentropy';
+import DocumentChatbot from './components/DocumentChatbot';
 
 interface DocumentState {
   apiKey: string;
@@ -104,30 +105,26 @@ const DocumentManager: React.FC = () => {
     setState(prev => ({ ...prev, loading: true }));
 
     try {
-        // Attempt to create the collection
-        const options = {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${state.apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ collection_name: 'default' })
-        };
+        // Add file size check
+        const MAX_FILE_SIZE = 2000 * 1024 * 1024; // 1GB limit
+        for (const file of state.files) {
+            if (file.size > MAX_FILE_SIZE) {
+                throw new Error(`File ${file.name} exceeds 1GB limit`);
+            }
+        }
 
-        await fetch('https://api.zeroentropy.dev/v1/collections/add-collection', options)
-            .then(response => response.json())
-            .then(response => {
-                if (response.error && response.error.message.includes('already exists')) {
-                    console.log('Collection already exists, proceeding with upload.');
-                } else if (response.error) {
-                    throw new Error(response.error.message);
-                }
-            })
-            .catch(err => {
-                console.error('Error creating collection:', err);
-                throw err;
-            });
 
+
+        // // Create collection if it doesn't exist
+        // try {
+        //     await state.client.collections.add({ collection_name: 'default' });
+        // } catch (err: any) {
+        //     if (!err.message?.includes('already exists')) {
+        //         throw err;
+        //     }
+        // }
+
+        // Process files in chunks
         for (const file of state.files) {
             const base64Content = await new Promise<string>((resolve, reject) => {
                 const reader = new FileReader();
@@ -139,6 +136,7 @@ const DocumentManager: React.FC = () => {
                 reader.readAsDataURL(file);
             });
 
+            // Upload with proper content type detection
             await state.client.documents.add({
                 collection_name: 'default',
                 path: `documents/${file.name}`,
@@ -162,10 +160,10 @@ const DocumentManager: React.FC = () => {
             message: 'Files uploaded successfully!',
             loading: false
         }));
-    } catch (error) {
+    } catch (error: any) {
         setState(prev => ({
             ...prev,
-            message: 'Upload failed. Please try again.',
+            message: `Upload failed: ${error.message}`,
             loading: false
         }));
         console.error('Upload error:', error);
@@ -327,6 +325,14 @@ const DocumentManager: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Add the Chatbot component */}
+          <div className="mt-8">
+            <DocumentChatbot 
+              client={state.client} 
+              collectionName="default" 
+            />
+          </div>
         </>
       )}
 
